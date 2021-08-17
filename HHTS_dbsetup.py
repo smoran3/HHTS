@@ -1,11 +1,12 @@
 import psycopg2
 import pandas as pd
 from sqlalchemy import create_engine
+import os
 
-#change for your setup
+####################################
+# change for your setup
 DB_NAME = "HHTS"
-
-#database connection
+#database connection info
 db_connection_info = {
     "database": DB_NAME,
     "host": "localhost",
@@ -15,6 +16,11 @@ db_connection_info = {
 }
 connection = psycopg2.connect(**db_connection_info)
 cur = connection.cursor() 
+#another format for connection info
+conn_string = 'postgres://postgres:root@localhost/HHTS'
+#where your HHTS excel files are located
+filepath = "C:/Users/smoran/Downloads/PublicDB_RELEASE/DVRPC HTS Database Files/"
+######################################
 
 #get list of existing tables in DB
 def GetTableList(t_schema):
@@ -32,12 +38,12 @@ def GetTableList(t_schema):
     
     return(table_list)
 
+#reformat that list
 listtables = []
 for i in range(0, len(GetTableList('public'))):
     listtables.append(GetTableList('public')[i][0])
 
-conn_string = 'postgres://postgres:root@localhost/HHTS'
-
+#clean up column names for import
 def df_clean(df):
     # Replace "Column Name" with "column_name"
     df.columns = df.columns.str.replace(" ", "_")
@@ -46,46 +52,23 @@ def df_clean(df):
     for s in [".", "-", "(", ")", "+"]:
         df.columns = df.columns.str.replace(s, "", regex=False)
     return df
-    
 
-#Read and Load Household table
-if "household" not in listtables:
-    hh_xlsx = "C:/Users/smoran/Downloads/PublicDB_RELEASE/DVRPC HTS Database Files/1_Household_Public.xlsx"
-    df = pd.read_excel(hh_xlsx)
-    #clean db
-    df_clean(df)
-    #write to database
-    engine = create_engine(conn_string)
-    df.to_sql('household', engine, schema = 'public')
-else:
-    print("already in database")
+#read excel file, clean, and write to database    
+path = filepath + '%s'
+def loadtables(tbl_name, excel_file_name):
+    if tbl_name not in listtables:
+        xlsx = path % excel_file_name
+        df = pd.read_excel(xlsx)
+        #clean dataframe
+        df_clean(df)
+        #write to db
+        engine = create_engine(conn_string)
+        df.to_sql(tbl_name, engine, schema = 'public')
+    else:
+        print("already in database")
 
-#Load Person table
-if "person" not in listtables:
-    per_xlsx = "C:/Users/smoran/Downloads/PublicDB_RELEASE/DVRPC HTS Database Files/2_Person_Public.xlsx"
-    df = pd.read_excel(per_xlsx)
-    #write to database
-    engine = create_engine(conn_string)
-    df.to_sql('person', engine, schema = 'public')
-else:
-    print("already in database")
-
-#Load Vehicle table
-if "vehicle" not in listtables:
-    veh_xlsx = "C:/Users/smoran/Downloads/PublicDB_RELEASE/DVRPC HTS Database Files/3_Vehicle_Public.xlsx"
-    df = pd.read_excel(veh_xlsx)
-    #write to database
-    engine = create_engine(conn_string)
-    df.to_sql('vehicle', engine, schema = 'public')
-else:
-    print("already in database")
-
-#Load Trip table
-if "trip" not in listtables:
-    trip_xlsx = "C:/Users/smoran/Downloads/PublicDB_RELEASE/DVRPC HTS Database Files/4_Trip_Public.xlsx"
-    df = pd.read_excel(trip_xlsx)
-    #write to database
-    engine = create_engine(conn_string)
-    df.to_sql('trip', engine, schema = 'public')
-else:
-    print("already in database")
+#iterate over the files to run the above functions
+db_tbl_names = ['household', 'person', 'vehicle', 'trip']
+files = os.listdir(filepath)
+for i in range(0,4):
+    loadtables(db_tbl_names[i], files[i])
